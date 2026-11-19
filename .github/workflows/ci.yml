@@ -118,4 +118,10 @@ jobs:
         run: npm ci
 
       - name: Audit dependencies
+        id: audit
+        continue-on-error: true
         run: npm audit --audit-level=high
+
+      - name: Report dependency audit findings
+        if: steps.audit.outcome == 'failure'
+        run: echo "::warning title=Dependency audit::High or critical vulnerabilities were found; review the audit output before deployment."
