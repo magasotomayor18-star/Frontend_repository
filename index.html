@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Evidencia API REST - Catálogo de Productos</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+</head>
+<body>
+
+  <!-- 1. Encabezado simple -->
+  <header class="navbar">
+    <div class="nav-container">
+      <div class="brand">
+        <i class="bi bi-hdd-network-fill"></i>
+        <div>
+          <h1>API Productos <span>(Capa 3: Frontend)</span></h1>
+          <p class="subtitle">Evidencia del consumo RESTful en Node.js, Express y PostgreSQL</p>
+        </div>
+      </div>
+      <div class="status-pill" id="apiStatusPill">
+        <span class="dot"></span>
+        <span id="apiStatusText">Verificando API...</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- 2. Panel de Evidencia de la Petición HTTP -->
+    <section class="api-monitor-card" aria-label="Monitor de la API">
+      <div class="monitor-header">
+        <span class="monitor-title"><i class="bi bi-activity"></i> Consola de la Petición HTTP en Tiempo Real</span>
+        <div class="view-toggles">
+          <button id="btnViewCards" class="toggle-btn active"><i class="bi bi-grid-fill"></i> Vista Gráfica</button>
+          <button id="btnViewJson" class="toggle-btn"><i class="bi bi-code-slash"></i> Ver JSON de la API</button>
+        </div>
+      </div>
+      
+      <div class="monitor-body">
+        <div class="monitor-metric">
+          <span class="metric-label">Método y Endpoint</span>
+          <span class="metric-value code-pill" id="metricEndpoint">GET /api/v1/productos</span>
+        </div>
+        <div class="monitor-metric">
+          <span class="metric-label">Código HTTP</span>
+          <span class="metric-value badge-status" id="metricStatus">---</span>
+        </div>
+        <div class="monitor-metric">
+          <span class="metric-label">Tiempo de Respuesta</span>
+          <span class="metric-value" id="metricTime">0 ms</span>
+        </div>
+        <div class="monitor-metric">
+          <span class="metric-label">Total en PostgreSQL</span>
+          <span class="metric-value" id="metricTotal">10.000 filas</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Barra de Control (Búsqueda, Páginas y Crear) -->
+    <section class="controls-bar">
+      <div class="search-group">
+        <i class="bi bi-search"></i>
+        <input 
+          type="text" 
+          id="searchInput" 
+          placeholder="Buscar producto por nombre o descripción (Filtra en PostgreSQL)..." 
+          aria-label="Buscar productos"
+        >
+        <button id="clearSearchBtn" class="clear-btn" hidden><i class="bi bi-x-circle-fill"></i></button>
+      </div>
+
+      <div class="action-group">
+        <div class="limit-selector">
+          <label for="limitSelect">Mostrar:</label>
+          <select id="limitSelect">
+            <option value="8">8 por pág.</option>
+            <option value="12" selected>12 por pág.</option>
+            <option value="24">24 por pág.</option>
+            <option value="50">50 por pág.</option>
+          </select>
+        </div>
+
+        <button id="btnOpenCreate" class="btn-primary">
+          <i class="bi bi-plus-circle-fill"></i> Probar POST (Nuevo)
+        </button>
+      </div>
+    </section>
+
+    <!-- 4. Contenedor de Vista JSON Crudo (Oculto por defecto) -->
+    <section id="jsonViewSection" class="json-section" hidden>
+      <div class="json-header">
+        <span><i class="bi bi-braces"></i> Respuesta JSON exacta recibida desde <code>http://localhost:5050/api/v1/productos</code></span>
+        <button id="btnCopyJson" class="btn-copy"><i class="bi bi-clipboard"></i> Copiar JSON</button>
+      </div>
+      <pre><code id="jsonCodeOutput">Cargando datos de la API...</code></pre>
+    </section>
+
+    <!-- 5. Rejilla Visual Adaptativa de Productos (Se ajusta al tamaño de ventana) -->
+    <section id="cardsViewSection" class="cards-section">
+      <div class="products-grid" id="productsGrid">
+        <!-- Renderizado dinámico desde script.js -->
+      </div>
+    </section>
+
+    <!-- 6. Paginación Adaptativa -->
+    <nav class="pagination-wrapper" aria-label="Paginación de productos">
+      <div class="pagination-controls" id="paginationControls"></div>
+    </nav>
+
+  </main>
+
+  <!-- 7. Modal Simple para Probar Crear Producto (POST) -->
+  <dialog id="createModal" class="simple-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2><i class="bi bi-box-seam"></i> Crear Producto (Probar API POST)</h2>
+        <button class="close-modal-btn" onclick="document.getElementById('createModal').close()">&times;</button>
+      </div>
+      <form id="createProductForm" class="modal-form">
+        <p class="modal-desc">Al enviar este formulario se enviará un <code>POST /api/v1/productos</code> con payload JSON hacia el backend en el puerto 5050.</p>
+        
+        <div class="form-group">
+          <label for="newNombre">Nombre del Producto *</label>
+          <input type="text" id="newNombre" placeholder="Ej: Taladro Percutor Milwaukee 20V" required minlength="3">
+        </div>
+
+        <div class="form-group">
+          <label for="newDescripcion">Descripción Técnica *</label>
+          <textarea id="newDescripcion" rows="2" placeholder="Características del producto..." required minlength="10"></textarea>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="newPvp">PVP ($) *</label>
+            <input type="number" id="newPvp" step="0.01" min="0.01" placeholder="Ej: 145.50" required>
+          </div>
+          <div class="form-group">
+            <label for="newStock">Stock Disponible *</label>
+            <input type="number" id="newStock" min="0" placeholder="Ej: 25" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="newImagen">URL de Imagen</label>
+          <input type="url" id="newImagen" value="https://images.unsplash.com/photo-1504148455328-c376907d081c?w=500&q=80" required>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" onclick="document.getElementById('createModal').close()">Cancelar</button>
+          <button type="submit" class="btn-primary"><i class="bi bi-send-fill"></i> Ejecutar POST</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- 8. Toast de Notificaciones -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>
