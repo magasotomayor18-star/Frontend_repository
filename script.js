@@ -42,7 +42,7 @@ const elements = {
 
 // Utilidad simple de escape HTML (Anti-XSS)
 const escapeHTML = (str) => {
-  if (typeof str !== 'string') return str;
+  if (typeof str !== 'string') return '';
   return str.replace(/[&<>'"]/g, (tag) => ({
     '&': '&amp;',
     '<': '&lt;',
@@ -50,6 +50,17 @@ const escapeHTML = (str) => {
     "'": '&#39;',
     '"': '&quot;',
   }[tag] || tag));
+};
+
+const safeImageUrl = (value) => {
+  if (typeof value !== 'string' || value.trim() === '') return '';
+
+  try {
+    const url = new URL(value, window.location.href);
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
+  } catch {
+    return '';
+  }
 };
 
 // Notificación Toast flotante
@@ -142,30 +153,35 @@ function renderGrid(products) {
     return;
   }
 
-  elements.productsGrid.innerHTML = products.map((item) => `
-    <article class="product-item">
-      <div class="item-thumb">
-        <span class="item-badge-id">ID: #${item.id}</span>
-        <span class="item-badge-stock">Stock: ${item.stock}</span>
-        <img 
-          src="${escapeHTML(item.urlimagen)}" 
-          alt="${escapeHTML(item.nombre)}"
-          loading="lazy"
-          onerror="this.src='https://images.unsplash.com/photo-1581783342308-f792dbdd27c5?w=500&q=80'"
-        >
-      </div>
-      <div class="item-body">
-        <h3 class="item-title">${escapeHTML(item.nombre)}</h3>
-        <p class="item-desc">${escapeHTML(item.descripcion)}</p>
-        <div class="item-footer">
-          <span class="item-pvp">$${Number(item.pvp).toFixed(2)}</span>
-          <button class="btn-delete-card" onclick="deleteProduct(${item.id})" title="Probar DELETE /api/v1/productos/${item.id}">
-            <i class="bi bi-trash-fill"></i> DELETE
-          </button>
+  elements.productsGrid.innerHTML = products.map((item) => {
+    const id = Number(item.id);
+    if (!Number.isSafeInteger(id) || id <= 0) return '';
+
+    return `
+      <article class="product-item">
+        <div class="item-thumb">
+          <span class="item-badge-id">ID: #${id}</span>
+          <span class="item-badge-stock">Stock: ${Number(item.stock) || 0}</span>
+          <img
+            src="${escapeHTML(safeImageUrl(item.urlimagen))}"
+            alt="${escapeHTML(item.nombre)}"
+            loading="lazy"
+            onerror="this.src='https://images.unsplash.com/photo-1581783342308-f792dbdd27c5?w=500&q=80'"
+          >
         </div>
-      </div>
-    </article>
-  `).join('');
+        <div class="item-body">
+          <h3 class="item-title">${escapeHTML(item.nombre)}</h3>
+          <p class="item-desc">${escapeHTML(item.descripcion)}</p>
+          <div class="item-footer">
+            <span class="item-pvp">$${Number(item.pvp).toFixed(2)}</span>
+            <button class="btn-delete-card" data-delete-id="${id}" type="button" title="Probar DELETE /api/v1/productos/${id}">
+              <i class="bi bi-trash-fill"></i> DELETE
+            </button>
+          </div>
+        </div>
+      </article>
+    `;
+  }).join('');
 }
 
 // 4. RENDERIZAR PAGINACIÓN
@@ -245,6 +261,17 @@ window.deleteProduct = async (id) => {
     notify(`❌ Error al eliminar producto #${id}`);
   }
 };
+
+elements.productsGrid.addEventListener('click', (event) => {
+  if (!(event.target instanceof Element)) return;
+  const button = event.target.closest('[data-delete-id]');
+  if (!button) return;
+
+  const id = Number(button.dataset.deleteId);
+  if (Number.isSafeInteger(id) && id > 0) {
+    window.deleteProduct(id);
+  }
+});
 
 // 7. PROBAR CREAR (POST /api/v1/productos)
 elements.createProductForm.addEventListener('submit', async (e) => {

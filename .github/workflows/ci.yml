@@ -1,0 +1,94 @@
+name: Frontend CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend-and-api:
+    name: Frontend and API integration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: backend_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d backend_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout frontend
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout backend
+        uses: actions/checkout@v4
+        with:
+          repository: magasotomayor18-star/Backend_repository
+          ref: main
+          path: backend
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check frontend JavaScript syntax
+        run: node --check script.js
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Generate Prisma client
+        working-directory: backend
+        run: npx prisma generate --schema prisma/schema.prisma
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/backend_ci?schema=public
+
+      - name: Prepare test database
+        working-directory: backend
+        run: npx prisma db push --schema prisma/schema.prisma --skip-generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/backend_ci?schema=public
+
+      - name: Run API contract tests
+        env:
+          API_BASE_URL: http://127.0.0.1:5050/api/v1
+          API_VERSION: v1
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/backend_ci?schema=public
+          NODE_ENV: test
+          PORT: 5050
+        run: |
+          node backend/server.js > backend/server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail "$API_BASE_URL/health" > /dev/null; then
+              break
+            fi
+            sleep 2
+          done
+
+          if ! curl --silent --fail "$API_BASE_URL/health" > /dev/null; then
+            cat backend/server.log
+            exit 1
+          fi
+
+          node --test tests/api.integration.test.mjs
