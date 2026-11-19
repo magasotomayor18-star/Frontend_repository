@@ -5,9 +5,46 @@ const apiBaseUrl = process.env.API_BASE_URL || 'http://127.0.0.1:5050/api/v1';
 const jsonHeaders = { 'Content-Type': 'application/json' };
 
 test('versioned products API supports health, validation, pagination, and CRUD', async () => {
-  const healthResponse = await fetch(`${apiBaseUrl}/health`);
+  const allowedOrigin = 'https://frontend.example.test';
+  const healthResponse = await fetch(`${apiBaseUrl}/health`, {
+    headers: { Origin: allowedOrigin },
+  });
   assert.equal(healthResponse.status, 200);
   assert.equal((await healthResponse.json()).success, true);
+  assert.equal(healthResponse.headers.get('x-api-version'), 'v1');
+  assert.equal(healthResponse.headers.get('access-control-allow-origin'), allowedOrigin);
+  assert.equal(healthResponse.headers.get('access-control-allow-credentials'), 'true');
+
+  const preflightResponse = await fetch(`${apiBaseUrl}/productos`, {
+    method: 'OPTIONS',
+    headers: {
+      Origin: allowedOrigin,
+      'Access-Control-Request-Method': 'POST',
+      'Access-Control-Request-Headers': 'content-type',
+    },
+  });
+  assert.equal(preflightResponse.status, 204);
+  assert.match(preflightResponse.headers.get('access-control-allow-methods'), /\bPOST\b/);
+
+  const blockedOriginResponse = await fetch(`${apiBaseUrl}/health`, {
+    headers: { Origin: 'https://untrusted.example.test' },
+  });
+  assert.equal(blockedOriginResponse.status, 403);
+
+  const malformedJsonResponse = await fetch(`${apiBaseUrl}/productos`, {
+    method: 'POST',
+    headers: jsonHeaders,
+    body: '{"nombre":',
+  });
+  assert.equal(malformedJsonResponse.status, 400);
+  assert.equal((await malformedJsonResponse.json()).error.code, 'INVALID_JSON_PAYLOAD');
+
+  const oversizedJsonResponse = await fetch(`${apiBaseUrl}/productos`, {
+    method: 'POST',
+    headers: jsonHeaders,
+    body: JSON.stringify({ nombre: 'x'.repeat(51 * 1024) }),
+  });
+  assert.equal(oversizedJsonResponse.status, 413);
 
   const listResponse = await fetch(`${apiBaseUrl}/productos?page=1&limit=2`);
   assert.equal(listResponse.status, 200);
