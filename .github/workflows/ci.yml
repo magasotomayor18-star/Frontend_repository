@@ -31,12 +31,12 @@ jobs:
 
     steps:
       - name: Checkout frontend
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Checkout backend
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: magasotomayor18-star/Backend_repository
           ref: main
